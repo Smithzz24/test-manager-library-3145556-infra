@@ -1,0 +1,66 @@
+name: test-manager-library
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: library
+      POSTGRES_USER: library
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD in the local .env}
+      TZ: UTC
+      PGTZ: UTC
+    command: ["postgres", "-c", "timezone=UTC"]
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U library -d library"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  api:
+    build: ../test-manager-library-3145556-api
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Define APP_KEY in the local .env}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_DATABASE: library
+      DB_USERNAME: library
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD in the local .env}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET in the local .env}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?Define ADMIN_USERNAME in the local .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Define ADMIN_PASSWORD in the local .env}
+      APP_LOCALE: es
+      APP_FALLBACK_LOCALE: es
+      CORS_ORIGIN: http://localhost:8080
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(file_get_contents('http://127.0.0.1:8000/api/v1/health') === '{\"status\":\"ok\"}' ? 0 : 1);"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  app:
+    build: ../test-manager-library-3145556-app
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+  page:
+    image: nginx:alpine
+    ports:
+      - "127.0.0.1:8081:80"
+    volumes:
+      - ../test-manager-library-3145556-page/index.html:/usr/share/nginx/html/index.html:ro
+      - ../test-manager-library-3145556-page/styles.css:/usr/share/nginx/html/styles.css:ro
+
+volumes:
+  database:
